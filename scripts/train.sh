@@ -6,8 +6,6 @@
 #SBATCH --mem=50G
 #SBATCH -G 1
 
-module load python/3.9.21
-
 # Activate your virtual environment
 source /hpf/largeprojects/tcagstor/tcagstor_tmp/klangille/plmtune_env/bin/activate
 
