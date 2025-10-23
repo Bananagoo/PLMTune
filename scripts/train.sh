@@ -9,10 +9,10 @@
 module load python/3.9.21
 
 # Activate your virtual environment
-source /path/to/your/writable/folder/PLMTune/plmtune_env/bin/activate
+source /hpf/largeprojects/tcagstor/tcagstor_tmp/klangille/plmtune_env/bin/activate
 
-# Move into repo
-cd /path/to/your/writable/folder/PLMTune
+# Move into your project folder
+cd /hpf/largeprojects/tcagstor/tcagstor_tmp/klangille/PLMTune
 
 # Check CUDA visibility
 nvidia-smi
