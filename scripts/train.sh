@@ -8,21 +8,37 @@
 #SBATCH --gres=gpu:1
 #SBATCH --export=ALL
 
-echo "=== Starting job on $(hostname) ==="
-echo "Loading Python module..."
+echo "=== [PLMTune] Environment Setup ==="
+echo "Running on $(hostname)"
+echo "Time: $(date)"
+
+# Load your Python + CUDA environment
 module load python/3.11.3_torch_gpu
 
-# Move to your repo directory
+# Use your large writable scratch directory for pip temp/cache
+export TMPDIR=/hpf/largeprojects/tcagstor/tcagstor_tmp/klangille/pip_tmp
+mkdir -p $TMPDIR
+
+# Move to repo
 cd /hpf/largeprojects/tcagstor/tcagstor_tmp/klangille/PLMTune || exit 1
 
 # Add project root to Python path
 export PYTHONPATH=$(pwd)/src
 
+# Create logs folder if missing
+mkdir -p logs
 
-# Check Python and torch availability
-which python
-python -c "import torch; print('Torch version:', torch.__version__)"
-python -c "import torch; print('CUDA available:', torch.cuda.is_available())"
+echo "Installing dependencies from requirements.txt ..."
+grep -v -E "^(torch|torchvision)" requirements.txt > requirements_hpc.txt
+
+# Install everything else
+pip install --user --no-deps -r requirements_hpc.txt
+
+# Optional cleanup
+pip cache purge -q
+
+echo "=== [PLMTune] Environment setup complete! ==="
+python -c "import torch; print('Torch:', torch.__version__, 'CUDA:', torch.cuda.is_available())"
 
 # Run your training script
 python scripts/train.py \
