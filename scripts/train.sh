@@ -15,6 +15,9 @@ module load python/3.11.3_torch_gpu
 # Move to your repo directory
 cd /hpf/largeprojects/tcagstor/tcagstor_tmp/klangille/PLMTune || exit 1
 
+# Add project root to Python path
+export PYTHONPATH=$(pwd)
+
 # Check Python and torch availability
 which python
 python -c "import torch; print('Torch version:', torch.__version__)"
