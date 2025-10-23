@@ -3,9 +3,9 @@ import torch, torch.nn as nn
 from torch.utils.data import DataLoader
 import wandb
 from scipy.stats import spearmanr, pearsonr
-from src.data.vep_dataset import VEPDataset, make_collate
-from src.models.esm_utils import load_esm, residue_representations
-from src.models.esm_head import VEPHead
+from idr_vep.data.vep_dataset import VEPDataset, make_collate
+from idr_vep.utils.esm_utils import load_esm, residue_representations
+from idr_vep.models.esm_head import VEPHead
 
 def spearman(a,b):
     return float(spearmanr(a, b).statistic)
@@ -42,8 +42,10 @@ def main():
     head = VEPHead(d_model, p=args.dropout).to(device)
 
     collate = make_collate(batch_converter)
-    train_dl = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True,  num_workers=2, collate_fn=collate)
-    val_dl   = DataLoader(val_ds,   batch_size=args.batch_size, shuffle=False, num_workers=2, collate_fn=collate)
+    # Use num_workers=0 on Windows to avoid multiprocessing issues
+    num_workers = 0 if os.name == 'nt' else 2
+    train_dl = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True,  num_workers=num_workers, collate_fn=collate)
+    val_dl   = DataLoader(val_ds,   batch_size=args.batch_size, shuffle=False, num_workers=num_workers, collate_fn=collate)
 
     # Opt & loss
     optim = torch.optim.AdamW(head.parameters(), lr=args.lr, weight_decay=args.weight_decay)

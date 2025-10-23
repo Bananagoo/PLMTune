@@ -1,9 +1,9 @@
 import argparse, torch, numpy as np, pandas as pd
 from torch.utils.data import DataLoader
 from scipy.stats import spearmanr, pearsonr
-from src.data.vep_dataset import VEPDataset, make_collate
-from src.models.esm_utils import load_esm, residue_representations
-from src.models.esm_head import VEPHead
+from idr_vep.data.vep_dataset import VEPDataset, make_collate
+from idr_vep.utils.esm_utils import load_esm, residue_representations
+from idr_vep.models.esm_head import VEPHead
 
 def main():
     ap = argparse.ArgumentParser()
