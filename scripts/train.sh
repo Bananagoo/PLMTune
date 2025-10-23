@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -l
 #SBATCH --job-name=plmtune
 #SBATCH --output=logs/train_%j.out
 #SBATCH --error=logs/train_%j.err
@@ -6,17 +6,18 @@
 #SBATCH --mem=50G
 #SBATCH -G 1
 
-# Activate your virtual environment
-source /hpf/largeprojects/tcagstor/tcagstor_tmp/klangille/plmtune_env/bin/activate
+echo "=== Starting job on $(hostname) ==="
+echo "Python path check:"
+which /hpf/largeprojects/tcagstor/tcagstor_tmp/klangille/plmtune_env/bin/python
 
-# Move into your project folder
-cd /hpf/largeprojects/tcagstor/tcagstor_tmp/klangille/PLMTune
+# Move to repo
+cd /hpf/largeprojects/tcagstor/tcagstor_tmp/klangille/PLMTune || exit 1
 
-# Check CUDA visibility
-nvidia-smi
+# Run directly with your venv’s Python
+/hpf/largeprojects/tcagstor/tcagstor_tmp/klangille/plmtune_env/bin/python -c "import torch; print('Torch version:', torch.__version__)"
+/hpf/largeprojects/tcagstor/tcagstor_tmp/klangille/plmtune_env/bin/python -c "import torch; print('CUDA available:', torch.cuda.is_available())"
 
-# Run training
-python scripts/train.py \
+/hpf/largeprojects/tcagstor/tcagstor_tmp/klangille/plmtune_env/bin/python scripts/train.py \
   --train_csv data/processed/train.csv \
   --val_csv data/processed/val.csv \
   --project idr-vep-esm2
