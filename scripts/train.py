@@ -133,7 +133,7 @@ def main():
                 "d_model": d_model,
                 "head": head.state_dict(),
             }, args.ckpt_out)
-            print(f"  ✅ Saved best to {args.ckpt_out} (Spearman={sp:.3f})")
+            print(f" Saved best to {args.ckpt_out} (Spearman={sp:.3f})")
 
     wandb.finish()
 
