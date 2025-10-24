@@ -12,21 +12,17 @@ def load_esm(model_name: str = "esm2_t33_650M_UR50D", freeze: bool = True):
     if not os.path.exists(local_path):
         raise FileNotFoundError(f"Checkpoint not found at {local_path}")
 
-    # Patch regression loading to avoid the missing '-contact-regression.pt' crash
+    # Patch regression loading to avoid missing file crash
     orig_load = torch.load
-
     def safe_load(path, *args, **kwargs):
         if isinstance(path, str) and path.endswith("-contact-regression.pt"):
             print("Skipping missing regression weights:", path)
             return None
         return orig_load(path, *args, **kwargs)
-
     torch.load = safe_load
 
-    # Call normal fair-esm loader (it will now skip regression gracefully)
     model, alphabet = pretrained.load_model_and_alphabet_local(local_path)
 
-    # Restore torch.load
     torch.load = orig_load
 
     repr_layer = 33
@@ -39,3 +35,13 @@ def load_esm(model_name: str = "esm2_t33_650M_UR50D", freeze: bool = True):
 
     batch_converter = alphabet.get_batch_converter()
     return model, alphabet, batch_converter, embed_dim, repr_layer
+
+
+@torch.no_grad()
+def residue_representations(model, tokens, repr_layer: int):
+    """
+    Get residue-level representations from an ESM model output.
+    """
+    out = model(tokens, repr_layers=[repr_layer], return_contacts=False)
+    reps = out["representations"][repr_layer]  # [B, L, D]
+    return reps
