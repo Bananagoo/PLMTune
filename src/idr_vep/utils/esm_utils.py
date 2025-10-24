@@ -2,11 +2,21 @@ import torch
 from esm import pretrained
 
 def load_esm(model_name: str = "esm2_t33_650M_UR50D", freeze: bool = True):
+    """
+    Robust ESM-2 loader (handles version differences, skips regression file).
+    """
     local_path = "/hpf/largeprojects/tcagstor/tcagstor_tmp/klangille/PLMTune/models/esm2_t33_650M_UR50D.pt"
-    print(f"Loading ESM-2 model directly from local path: {local_path}")
+    print(f"Loading ESM-2 model from: {local_path}")
 
+    # Load model weights
     model_data = torch.load(local_path, map_location="cpu")
-    model, alphabet = pretrained.load_model_and_alphabet_core(model_data, regression_data=None)
+
+    # --- universal try/except to handle different ESM versions ---
+    try:
+        model, alphabet = pretrained.load_model_and_alphabet_core(model_data, regression_data=None)
+    except TypeError:
+        # Newer fair-esm versions flip argument order
+        model, alphabet = pretrained.load_model_and_alphabet_core(None, model_data)
 
     repr_layer = 33
     embed_dim = 1280
