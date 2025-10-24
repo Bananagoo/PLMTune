@@ -3,7 +3,7 @@ from esm import pretrained
 
 def load_esm(model_name: str = "esm2_t33_650M_UR50D", freeze: bool = True):
     """
-    Load a local ESM-2 model checkpoint instead of downloading.
+    Load a local ESM-2 model checkpoint.
     Returns: (model, alphabet, batch_converter, embed_dim, repr_layer)
     """
     local_path = "/hpf/largeprojects/tcagstor/tcagstor_tmp/klangille/PLMTune/models/esm2_t33_650M_UR50D.pt"
