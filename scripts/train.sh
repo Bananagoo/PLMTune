@@ -25,6 +25,11 @@ cd /hpf/largeprojects/tcagstor/tcagstor_tmp/klangille/PLMTune || exit 1
 # Add project root to Python path
 export PYTHONPATH=$(pwd)/src
 
+# Configure a persistent HuggingFace cache close to this repo (for offline reuse)
+export HF_HOME="$(pwd)/hf_cache"
+mkdir -p "$HF_HOME"
+echo "HF cache directory: $HF_HOME"
+
 # Create logs folder if missing
 mkdir -p logs
 
@@ -62,11 +67,17 @@ PROJECT=${PROJECT:-idr-vep-esm2}
 RUN_NAME=${RUN_NAME:-small-ft}
 TRAIN_CSV=${TRAIN_CSV:-data/processed/train.csv}
 VAL_CSV=${VAL_CSV:-data/processed/val.csv}
+OFFLINE=${OFFLINE:-0}              # 1=force transformers offline (after first download)
 
 if [ "$FINETUNE" = "1" ]; then
   FT_ARGS="--finetune_esm --unfreeze_esm --esm_lr_mult ${ESM_LR_MULT}"
 else
   FT_ARGS="--freeze_esm"
+fi
+
+if [ "$OFFLINE" = "1" ]; then
+  export TRANSFORMERS_OFFLINE=1
+  echo "Transformers offline mode enabled"
 fi
 
 python scripts/train.py \

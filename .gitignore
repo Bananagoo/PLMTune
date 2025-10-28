@@ -60,3 +60,6 @@ wandb/
 mlruns/
 .hydra/
 outputs/
+
+# Local HuggingFace cache (large model files)
+hf_cache/
