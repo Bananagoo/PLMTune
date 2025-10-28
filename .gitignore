@@ -37,9 +37,7 @@ plmtune/
 
 # Data files (large datasets)
 data/raw/*
-!data/processed/*
-!data/raw/.gitkeep
-!data/processed/.gitkeep
+data/processed/*
 
 # Model checkpoints
 *.pt
