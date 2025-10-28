@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import List, Tuple, Dict, Any
 import torch, pandas as pd
 from torch.utils.data import Dataset
+from transformers import PreTrainedTokenizer
 
 @dataclass
 class Row:
@@ -45,18 +46,32 @@ class VEPDataset(Dataset):
         }
         return item
 
-def make_collate(batch_converter):
+def make_collate(tokenizer: PreTrainedTokenizer):
     """
-    Returns a collate_fn that packs (WT, MUT) as ESM batch tensors + labels + positions.
+    Returns a collate_fn that tokenizes (WT, MUT) sequences into HF inputs dicts
+    + labels + positions. We keep special tokens; training will offset positions by +1.
     """
     def _collate(samples: List[Dict[str,Any]]):
-        # ESM wants list of (label, seq) tuples
-        wt_tuples = [(s["protein_id"], s["wt_seq"]) for s in samples]
-        mut_tuples= [(s["protein_id"], s["mut_seq"]) for s in samples]
-        wt_labels, wt_strs, wt_tokens   = batch_converter(wt_tuples)
-        mut_labels, mut_strs, mut_tokens= batch_converter(mut_tuples)
+        wt_seqs  = [s["wt_seq"]  for s in samples]
+        mut_seqs = [s["mut_seq"] for s in samples]
+
+        wt_inputs = tokenizer(
+            wt_seqs,
+            return_tensors="pt",
+            padding=True,
+            truncation=True,
+            max_length=1024,
+        )
+        mut_inputs = tokenizer(
+            mut_seqs,
+            return_tensors="pt",
+            padding=True,
+            truncation=True,
+            max_length=1024,
+        )
 
         pos = torch.tensor([s["pos"] for s in samples], dtype=torch.long)  # 0-based
         y   = torch.tensor([s["label"] for s in samples], dtype=torch.float32)
-        return (wt_tokens, mut_tokens, pos, y)
+        return (wt_inputs, mut_inputs, pos, y)
+
     return _collate

@@ -1,47 +1,73 @@
-import os
 import torch
-from esm import pretrained
+from typing import Tuple, Dict
+from transformers import EsmModel, EsmTokenizer
 
-def load_esm(model_name: str = "esm2_t33_650M_UR50D", freeze: bool = True):
+
+def _resolve_esm_name(name: str) -> str:
+    """Map short names to HuggingFace ESM-2 model IDs."""
+    aliases = {
+        # small
+        "t6": "facebook/esm2_t6_8M_UR50D",
+        "8m": "facebook/esm2_t6_8M_UR50D",
+        "small": "facebook/esm2_t6_8M_UR50D",
+        # base
+        "t12": "facebook/esm2_t12_35M_UR50D",
+        "35m": "facebook/esm2_t12_35M_UR50D",
+        "base": "facebook/esm2_t12_35M_UR50D",
+        # large
+        "t33": "facebook/esm2_t33_650M_UR50D",
+        "650m": "facebook/esm2_t33_650M_UR50D",
+        "large": "facebook/esm2_t33_650M_UR50D",
+    }
+    key = name.strip().lower()
+    return aliases.get(key, name)
+
+
+def load_esm(model_name: str = "facebook/esm2_t12_35M_UR50D", freeze: bool = True) -> Tuple[EsmModel, EsmTokenizer, int]:
     """
-    Load ESM-2 model from local checkpoint safely, skipping regression head.
+    Load an ESM-2 model via HuggingFace Transformers, matching the previous repo style.
+
+    Returns: (model, tokenizer, hidden_size)
     """
-    local_path = "/hpf/largeprojects/tcagstor/tcagstor_tmp/klangille/PLMTune/models/esm2_t33_650M_UR50D.pt"
-    print(f"Loading ESM-2 model from local checkpoint: {local_path}")
+    hf_name = _resolve_esm_name(model_name)
+    print(f"Loading ESM-2 model: {hf_name}")
 
-    if not os.path.exists(local_path):
-        raise FileNotFoundError(f"Checkpoint not found at {local_path}")
-
-    # Patch regression loading to avoid missing file crash
-    orig_load = torch.load
-    def safe_load(path, *args, **kwargs):
-        if isinstance(path, str) and path.endswith("-contact-regression.pt"):
-            print("Skipping missing regression weights:", path)
-            return None
-        return orig_load(path, *args, **kwargs)
-    torch.load = safe_load
-
-    model, alphabet = pretrained.load_model_and_alphabet_local(local_path)
-
-    torch.load = orig_load
-
-    repr_layer = 33
-    embed_dim = 1280
+    model = EsmModel.from_pretrained(hf_name)
+    tokenizer = EsmTokenizer.from_pretrained(hf_name)
 
     if freeze:
         for p in model.parameters():
             p.requires_grad = False
         model.eval()
 
-    batch_converter = alphabet.get_batch_converter()
-    return model, alphabet, batch_converter, embed_dim, repr_layer
+    hidden_size = model.config.hidden_size
+    return model, tokenizer, hidden_size
 
 
 @torch.no_grad()
-def residue_representations(model, tokens, repr_layer: int):
+def residue_representations(model: EsmModel, token_inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
     """
-    Get residue-level representations from an ESM model output.
+    Get residue-level representations from an ESM-2 HuggingFace model output.
+
+    Args:
+        model: EsmModel
+        token_inputs: dict with input_ids/attention_mask/etc. (as from EsmTokenizer)
+
+    Returns:
+        last_hidden_state [B, L, D] including special tokens
     """
-    out = model(tokens, repr_layers=[repr_layer], return_contacts=False)
-    reps = out["representations"][repr_layer]  # [B, L, D]
-    return reps
+    outputs = model(**token_inputs)
+    return outputs.last_hidden_state
+
+
+@torch.no_grad()
+def residue_representations_with_attn(
+    model: EsmModel,
+    token_inputs: Dict[str, torch.Tensor]
+) -> Tuple[torch.Tensor, tuple]:
+    """
+    Get last hidden states and attentions from ESM-2.
+    Returns (last_hidden_state, attentions) where attentions is a tuple of layer tensors.
+    """
+    outputs = model(**token_inputs, output_attentions=True)
+    return outputs.last_hidden_state, outputs.attentions

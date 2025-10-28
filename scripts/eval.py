@@ -10,35 +10,46 @@ def main():
     ap.add_argument("--test_csv", default="data/processed/test.csv")
     ap.add_argument("--ckpt", default="best.pt")
     ap.add_argument("--batch_size", type=int, default=8)
+    ap.add_argument("--project", default=None, help="Optional W&B project to log eval metrics")
+    ap.add_argument("--run_name", default=None, help="Optional W&B run name for eval")
     args = ap.parse_args()
 
     ckpt = torch.load(args.ckpt, map_location="cpu")
-    model_name = ckpt["esm_name"]; repr_layer = ckpt["repr_layer"]; d_model = ckpt["d_model"]
+    model_name = ckpt["esm_name"]; d_model = ckpt["d_model"]
 
-    esm, alphabet, batch_converter, d_model_ck, repr_layer_ck = load_esm(model_name, freeze=True)
-    assert d_model==d_model_ck and repr_layer==repr_layer_ck
+    esm, tokenizer, d_model_ck = load_esm(model_name, freeze=True)
+    assert d_model==d_model_ck
     device = "cuda" if torch.cuda.is_available() else "cpu"
     esm = esm.to(device)
+    # Load fine-tuned ESM weights if present
+    if "esm" in ckpt:
+        try:
+            esm.load_state_dict(ckpt["esm"])
+            print("Loaded fine-tuned ESM weights from checkpoint")
+        except Exception as e:
+            print("Warning: failed to load ESM weights from checkpoint:", e)
 
     head = VEPHead(d_model); head.load_state_dict(ckpt["head"]); head.eval().to(device)
 
     ds = VEPDataset(args.test_csv)
-    collate = make_collate(batch_converter)
+    collate = make_collate(tokenizer)
     dl = DataLoader(ds, batch_size=args.batch_size, shuffle=False, num_workers=2, collate_fn=collate)
 
     preds=[]; labels=[]
     with torch.no_grad():
         for wt_tokens, mut_tokens, pos0, y in dl:
-            wt_tokens = wt_tokens.to(device)
-            mut_tokens= mut_tokens.to(device)
+            wt_tokens = {k: v.to(device) for k, v in wt_tokens.items()}
+            mut_tokens= {k: v.to(device) for k, v in mut_tokens.items()}
             y = y.to(device)
             pos1 = (pos0.to(device) + 1)
 
-            wt_rep = residue_representations(esm, wt_tokens, repr_layer)
-            mut_rep= residue_representations(esm, mut_tokens, repr_layer)
+            wt_rep = residue_representations(esm, wt_tokens)
+            mut_rep= residue_representations(esm, mut_tokens)
             b_idx = torch.arange(wt_rep.size(0), device=device)
-            h_wt  = wt_rep[b_idx, pos1, :]
-            h_mt  = mut_rep[b_idx, pos1, :]
+            max_idx = wt_rep.size(1) - 1
+            pos1c = torch.clamp(pos1, 0, max_idx)
+            h_wt  = wt_rep[b_idx, pos1c, :]
+            h_mt  = mut_rep[b_idx, pos1c, :]
             dh    = h_mt - h_wt
             pred  = head(dh)
 
@@ -50,7 +61,13 @@ def main():
     pr = float(pearsonr(preds, labels).statistic)
     rmse = float(np.sqrt(np.mean((preds-labels)**2)))
 
-    print(f"Test — Spearman: {sp:.3f} | Pearson: {pr:.3f} | RMSE: {rmse:.3f}")
+    print(f"Test | Spearman: {sp:.3f} | Pearson: {pr:.3f} | RMSE: {rmse:.3f}")
+    # Optional W&B logging
+    if args.project:
+        import wandb
+        wandb.init(project=args.project, name=args.run_name, config={"ckpt": args.ckpt, "batch_size": args.batch_size})
+        wandb.log({"test_spearman": sp, "test_pearson": pr, "test_rmse": rmse})
+        wandb.finish()
 
     # Save detailed predictions
     df = pd.read_csv(args.test_csv).copy()
@@ -63,3 +80,4 @@ def main():
 if __name__ == "__main__":
     import os
     main()
+
