@@ -31,14 +31,23 @@ mkdir -p logs
 echo "Installing dependencies from requirements.txt ..."
 grep -v -E "^(torch|torchvision)" requirements.txt > requirements_hpc.txt
 
-# Install everything else
-pip install --user --no-deps -r requirements_hpc.txt
+# Install everything else WITH dependencies (needed for transformers/ESM)
+pip install --user -r requirements_hpc.txt
 
 # Optional cleanup
 pip cache purge -q
 
 echo "=== [PLMTune] Environment setup complete! ==="
-python -c "import torch; print('Torch:', torch.__version__, 'CUDA:', torch.cuda.is_available())"
+python - << 'PY'
+import torch
+print('Torch:', torch.__version__, 'CUDA:', torch.cuda.is_available())
+try:
+    import transformers
+    from transformers import EsmModel
+    print('Transformers:', transformers.__version__, '| EsmModel import OK')
+except Exception as e:
+    print('Transformers import check failed:', e)
+PY
 
 # Run your training script
 
