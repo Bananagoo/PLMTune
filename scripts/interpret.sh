@@ -70,6 +70,7 @@ run_attention() {
     --model "$MODEL" \
     --batch_size "$BATCH_SIZE" \
     --n_samples "$N_SAMPLES" \
+    --out_dir "outputs/interpret/${RUN_PREFIX}-attention-${SLURM_JOB_ID:-local}" \
     --project "$PROJECT" \
     --run_name "${RUN_PREFIX}-attention"
 }
@@ -82,6 +83,7 @@ run_grad() {
     --csv "$CSV" \
     --batch_size "$BATCH_SIZE" \
     --n_samples "$N_SAMPLES" \
+    --out_dir "outputs/interpret/${RUN_PREFIX}-grad-${SLURM_JOB_ID:-local}" \
     --project "$PROJECT" \
     --run_name "${RUN_PREFIX}-grad"
 }
@@ -95,6 +97,7 @@ run_ig() {
     --ig_steps "$IG_STEPS" \
     --batch_size "$BATCH_SIZE" \
     --n_samples "$N_SAMPLES" \
+    --out_dir "outputs/interpret/${RUN_PREFIX}-ig-${SLURM_JOB_ID:-local}" \
     --project "$PROJECT" \
     --run_name "${RUN_PREFIX}-ig"
 }
@@ -112,6 +115,7 @@ run_sae() {
     --sae_batch "$SAE_BATCH" \
     --sae_lr "$SAE_LR" \
     --l1 "$L1" \
+    --out_dir "outputs/interpret/${RUN_PREFIX}-sae-${SLURM_JOB_ID:-local}" \
     --project "$PROJECT" \
     --run_name "${RUN_PREFIX}-sae"
 }
@@ -132,4 +136,3 @@ case "$MODE" in
 esac
 
 echo "=== [PLMTune] Interpretability Done ==="
-

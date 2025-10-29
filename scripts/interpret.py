@@ -256,7 +256,19 @@ def run_sae(args):
         total_loss /= len(X)
         print(f"SAE epoch {epoch} | loss {total_loss:.4f} (recon {recon.item():.4f}, l1 {spars.item():.4f})")
 
-    os.makedirs(args.out_dir, exist_ok=True)
+    # Robust out_dir creation
+    try:
+        if os.path.exists(args.out_dir) and not os.path.isdir(args.out_dir):
+            # If a file exists with this name, move it aside
+            backup = args.out_dir + ".bak"
+            os.rename(args.out_dir, backup)
+        os.makedirs(args.out_dir, exist_ok=True)
+    except Exception as e:
+        # Fallback to a job-specific directory under outputs
+        fallback = os.path.join("outputs", "interpret")
+        os.makedirs(fallback, exist_ok=True)
+        args.out_dir = fallback
+        print(f"Warning: could not create out_dir, using fallback {args.out_dir}: {e}")
     torch.save({"state_dict": sae.state_dict(), "d_model": d_model, "code_dim": args.code_dim}, os.path.join(args.out_dir, "sae.pt"))
 
 
@@ -294,4 +306,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
