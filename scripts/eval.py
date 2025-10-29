@@ -1,4 +1,4 @@
-import argparse, torch, numpy as np, pandas as pd
+import argparse, torch, numpy as np, pandas as pd, os
 from torch.utils.data import DataLoader
 from scipy.stats import spearmanr, pearsonr
 from idr_vep.data.vep_dataset import VEPDataset, make_collate
@@ -12,9 +12,14 @@ def main():
     ap.add_argument("--batch_size", type=int, default=8)
     ap.add_argument("--project", default=None, help="Optional W&B project to log eval metrics")
     ap.add_argument("--run_name", default=None, help="Optional W&B run name for eval")
+    ap.add_argument("--out_dir", default="outputs/test_eval", help="Directory to write predictions")
     args = ap.parse_args()
 
-    ckpt = torch.load(args.ckpt, map_location="cpu")
+    # Safer torch.load for future PyTorch versions
+    try:
+        ckpt = torch.load(args.ckpt, map_location="cpu", weights_only=True)
+    except TypeError:
+        ckpt = torch.load(args.ckpt, map_location="cpu")
     model_name = ckpt["esm_name"]; d_model = ckpt["d_model"]
 
     esm, tokenizer, d_model_ck = load_esm(model_name, freeze=True)
@@ -72,12 +77,26 @@ def main():
     # Save detailed predictions
     df = pd.read_csv(args.test_csv).copy()
     df["pred"] = preds
-    out_csv = "outputs/test_predictions.csv"
-    os.makedirs("outputs", exist_ok=True)
+    # Robust output directory handling
+    out_dir = args.out_dir
+    try:
+        if os.path.exists(out_dir) and not os.path.isdir(out_dir):
+            os.rename(out_dir, out_dir + ".bak")
+        os.makedirs(out_dir, exist_ok=True)
+    except Exception as e:
+        fallback = "outputs"
+        try:
+            if os.path.exists(fallback) and not os.path.isdir(fallback):
+                os.rename(fallback, fallback + ".bak")
+            os.makedirs(fallback, exist_ok=True)
+        except Exception:
+            pass
+        out_dir = fallback
+        print(f"Warning: could not create out_dir {args.out_dir}, using {out_dir}: {e}")
+    out_csv = os.path.join(out_dir, "test_predictions.csv")
     df.to_csv(out_csv, index=False)
     print(f"Saved {out_csv} ({len(df)} rows)")
 
 if __name__ == "__main__":
-    import os
     main()
 

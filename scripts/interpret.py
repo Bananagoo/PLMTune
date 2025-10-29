@@ -3,6 +3,7 @@ import os
 from typing import List, Tuple
 
 import numpy as np
+from pathlib import Path
 import torch
 from torch.utils.data import DataLoader
 
@@ -67,7 +68,7 @@ def run_attention(args):
     collate = make_collate(tokenizer)
     dl = DataLoader(ds, batch_size=args.batch_size, shuffle=False, num_workers=0, collate_fn=collate)
 
-    os.makedirs(args.out_dir, exist_ok=True)
+    robust_makedirs(args.out_dir)
 
     import matplotlib.pyplot as plt
     import wandb
@@ -125,7 +126,7 @@ def run_grad(args, use_integrated=False):
     collate = make_collate(tokenizer)
     dl = DataLoader(ds, batch_size=args.batch_size, shuffle=False, num_workers=0, collate_fn=collate)
 
-    os.makedirs(args.out_dir, exist_ok=True)
+    robust_makedirs(args.out_dir)
     import matplotlib.pyplot as plt
     import wandb
     if args.project:
@@ -258,17 +259,17 @@ def run_sae(args):
 
     # Robust out_dir creation
     try:
-        if os.path.exists(args.out_dir) and not os.path.isdir(args.out_dir):
-            # If a file exists with this name, move it aside
-            backup = args.out_dir + ".bak"
-            os.rename(args.out_dir, backup)
-        os.makedirs(args.out_dir, exist_ok=True)
+        robust_makedirs(args.out_dir)
     except Exception as e:
         # Fallback to a job-specific directory under outputs
         fallback = os.path.join("outputs", "interpret")
-        os.makedirs(fallback, exist_ok=True)
-        args.out_dir = fallback
-        print(f"Warning: could not create out_dir, using fallback {args.out_dir}: {e}")
+        try:
+            robust_makedirs(fallback)
+            args.out_dir = fallback
+        except Exception as e2:
+            # Last resort: current working directory
+            args.out_dir = "."
+        print(f"Warning: could not create out_dir; using {args.out_dir}. Original error: {e}")
     torch.save({"state_dict": sae.state_dict(), "d_model": d_model, "code_dim": args.code_dim}, os.path.join(args.out_dir, "sae.pt"))
 
 
@@ -306,3 +307,20 @@ def main():
 
 if __name__ == "__main__":
     main()
+def robust_makedirs(path: str):
+    """Create directory path robustly, handling cases where parents exist as files.
+    Renames any file-path component to .bak and proceeds to create directories.
+    """
+    p = Path(path)
+    chain = list(p.parents)[::-1] + [p]
+    for comp in chain:
+        if comp.exists() and not comp.is_dir():
+            try:
+                comp.rename(comp.with_name(comp.name + ".bak"))
+            except Exception:
+                pass
+        try:
+            comp.mkdir(exist_ok=True)
+        except Exception:
+            # If parent is not a directory, keep trying next iteration after rename
+            continue

@@ -21,6 +21,13 @@ export HF_HOME="$(pwd)/hf_cache"
 mkdir -p "$HF_HOME" logs
 echo "HF cache directory: $HF_HOME"
 
+# Ensure a usable outputs directory hierarchy (avoid file named 'outputs')
+if [ -f outputs ]; then
+  echo "Found file named 'outputs'; moving to outputs.bak"
+  mv outputs outputs.bak
+fi
+mkdir -p outputs/interpret || true
+
 echo "Installing dependencies from requirements.txt ..."
 grep -v -E "^(torch|torchvision)" requirements.txt > requirements_hpc.txt
 pip install --user -r requirements_hpc.txt
