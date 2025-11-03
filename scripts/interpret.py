@@ -1,9 +1,9 @@
 import argparse
 import os
+from pathlib import Path
 from typing import List, Tuple
 
 import numpy as np
-from pathlib import Path
 import torch
 from torch.utils.data import DataLoader
 
@@ -16,6 +16,19 @@ from idr_vep.utils.esm_utils import (
 )
 
 
+def robust_makedirs(path: str):
+    """Create directory path robustly, handling file collisions."""
+    p = Path(path)
+    for comp in list(p.parents)[::-1] + [p]:
+        if comp.exists() and not comp.is_dir():
+            try:
+                comp.rename(comp.with_name(comp.name + ".bak"))
+            except Exception:
+                pass
+        try:
+            comp.mkdir(exist_ok=True)
+        except Exception:
+            continue
 def attention_rollout(attentions: Tuple[torch.Tensor, ...], mask: torch.Tensor = None) -> torch.Tensor:
     """Compute attention rollout across layers.
 
@@ -109,7 +122,10 @@ def run_attention(args):
 
 def run_grad(args, use_integrated=False):
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    ckpt = torch.load(args.ckpt, map_location="cpu")
+    try:
+        ckpt = torch.load(args.ckpt, map_location="cpu", weights_only=True)
+    except TypeError:
+        ckpt = torch.load(args.ckpt, map_location="cpu")
     model_name = ckpt["esm_name"]; d_model = ckpt["d_model"]
     esm, tokenizer, d_model_ck = load_esm(model_name, freeze=False)
     assert d_model == d_model_ck
@@ -201,7 +217,10 @@ def run_grad(args, use_integrated=False):
 
 def run_sae(args):
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    ckpt = torch.load(args.ckpt, map_location="cpu")
+    try:
+        ckpt = torch.load(args.ckpt, map_location="cpu", weights_only=True)
+    except TypeError:
+        ckpt = torch.load(args.ckpt, map_location="cpu")
     model_name = ckpt["esm_name"]; d_model = ckpt["d_model"]
     esm, tokenizer, d_model_ck = load_esm(model_name, freeze=True)
     assert d_model == d_model_ck
@@ -307,20 +326,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-def robust_makedirs(path: str):
-    """Create directory path robustly, handling cases where parents exist as files.
-    Renames any file-path component to .bak and proceeds to create directories.
-    """
-    p = Path(path)
-    chain = list(p.parents)[::-1] + [p]
-    for comp in chain:
-        if comp.exists() and not comp.is_dir():
-            try:
-                comp.rename(comp.with_name(comp.name + ".bak"))
-            except Exception:
-                pass
-        try:
-            comp.mkdir(exist_ok=True)
-        except Exception:
-            # If parent is not a directory, keep trying next iteration after rename
-            continue
