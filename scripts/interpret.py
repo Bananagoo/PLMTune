@@ -95,6 +95,9 @@ def run_attention(args):
 
         # Use MUT attention by default
         hidden, attns = residue_representations_with_attn(esm, mut_inputs)
+        if attns is None:
+            print("Warning: model did not return attentions; skipping batch")
+            continue
         mask = mut_inputs.get("attention_mask", None)
 
         rollout = attention_rollout(attns, mask=mask)
@@ -154,10 +157,7 @@ def run_grad(args, use_integrated=False):
         mut_inputs = {k: v.to(device) for k, v in mut_inputs.items()}
         pos1 = (pos0.to(device) + 1)
 
-        # Forward with grads
-        wt_inputs = {k: v.requires_grad_(True) for k, v in wt_inputs.items()}
-        mut_inputs = {k: v.requires_grad_(True) for k, v in mut_inputs.items()}
-
+        # Forward (autograd through ESM for completeness, but we operate on delta features)
         wt_rep = residue_representations(esm, wt_inputs)
         mut_rep = residue_representations(esm, mut_inputs)
 
@@ -166,32 +166,33 @@ def run_grad(args, use_integrated=False):
         pos1c = torch.clamp(pos1, 0, max_idx)
         h_wt = wt_rep[b_idx, pos1c, :]
         h_mt = mut_rep[b_idx, pos1c, :]
-        dh = h_mt - h_wt
-        pred = head(dh)
+        dh_base = (h_mt - h_wt).detach()
+
+        pred_eval = head(dh_base).detach()
 
         if use_integrated:
-            # Simple IG along linear path from zero baseline to input
             steps = max(10, args.ig_steps)
-            ig_attr = torch.zeros_like(dh)
-            baseline = torch.zeros_like(dh)
+            baseline = torch.zeros_like(dh_base)
+            ig_attr = torch.zeros_like(dh_base)
             for s in range(1, steps + 1):
-                x = baseline + (s / steps) * (dh - baseline)
-                x.requires_grad_(True)
+                alpha = s / steps
+                x = baseline + alpha * (dh_base - baseline)
+                x = x.clone().requires_grad_(True)
+                head.zero_grad(set_to_none=True)
                 out = head(x).sum()
-                out.backward(retain_graph=True)
+                out.backward()
                 ig_attr += x.grad.detach()
-            ig_attr = (dh - baseline) * ig_attr / steps
-            token_scores = ig_attr.norm(dim=-1)  # [B]
+            ig_attr = (dh_base - baseline) * ig_attr / steps
+            token_scores = ig_attr.norm(dim=-1)
+            pred_vals = pred_eval
         else:
+            head.zero_grad(set_to_none=True)
+            dh = dh_base.clone().requires_grad_(True)
+            pred = head(dh)
             pred.sum().backward()
-            # Saliency as grad-norm wrt dh
-            # dh is computed from h_mt/h_wt; approximate using gradients at h_mt
-            g_mt = mut_rep.grad if mut_rep.requires_grad else None
-            if g_mt is None:
-                # Fallback: use grad wrt mut_inputs input_ids embeddings is nontrivial; use dh as proxy
-                token_scores = dh.detach().norm(dim=-1)
-            else:
-                token_scores = g_mt[b_idx, pos1c, :].detach().norm(dim=-1)
+            token_scores = dh.grad.detach().norm(dim=-1)
+            pred_vals = pred.detach()
+            head.zero_grad(set_to_none=True)
 
         # Plot per-sample scores as a bar (one score per item position)
         for i in range(token_scores.size(0)):
@@ -203,7 +204,7 @@ def run_grad(args, use_integrated=False):
             fig.savefig(out_path, dpi=200)
             plt.close(fig)
             if args.project:
-                wandb.log({"grad_site": wandb.Image(out_path), "pred": float(pred[i].item())})
+                wandb.log({"grad_site": wandb.Image(out_path), "pred": float(pred_vals[i].item())})
 
         total += token_scores.size(0)
         esm.zero_grad(set_to_none=True)

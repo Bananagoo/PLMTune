@@ -44,7 +44,6 @@ def load_esm(model_name: str = "facebook/esm2_t12_35M_UR50D", freeze: bool = Tru
     return model, tokenizer, hidden_size
 
 
-@torch.no_grad()
 def residue_representations(model: EsmModel, token_inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
     """
     Get residue-level representations from an ESM-2 HuggingFace model output.
@@ -69,5 +68,8 @@ def residue_representations_with_attn(
     Get last hidden states and attentions from ESM-2.
     Returns (last_hidden_state, attentions) where attentions is a tuple of layer tensors.
     """
+    original = getattr(model.config, "output_attentions", False)
+    model.config.output_attentions = True
     outputs = model(**token_inputs, output_attentions=True)
+    model.config.output_attentions = original
     return outputs.last_hidden_state, outputs.attentions
