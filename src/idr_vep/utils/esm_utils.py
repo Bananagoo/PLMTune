@@ -68,8 +68,29 @@ def residue_representations_with_attn(
     Get last hidden states and attentions from ESM-2.
     Returns (last_hidden_state, attentions) where attentions is a tuple of layer tensors.
     """
-    original = getattr(model.config, "output_attentions", False)
-    model.config.output_attentions = True
-    outputs = model(**token_inputs, output_attentions=True)
-    model.config.output_attentions = original
+    original_output = getattr(model.config, "output_attentions", False)
+    original_impl = getattr(model.config, "attn_implementation", None)
+    forced_impl = False
+    try:
+        model.config.output_attentions = True
+        if original_impl == "sdpa":
+            try:
+                # Some configs require eager attention to provide weights
+                model.config.attn_implementation = "eager"
+                forced_impl = True
+            except ValueError:
+                pass
+        outputs = model(**token_inputs, output_attentions=True)
+    except ValueError:
+        # Fall back to no-attention path
+        hidden = model(**token_inputs).last_hidden_state
+        return hidden, None
+    finally:
+        model.config.output_attentions = original_output
+        if forced_impl and original_impl is not None:
+            try:
+                model.config.attn_implementation = original_impl
+            except ValueError:
+                pass
+
     return outputs.last_hidden_state, outputs.attentions

@@ -110,6 +110,7 @@ def run_attention(args):
             plt.colorbar()
             plt.tight_layout()
             out_path = os.path.join(args.out_dir, f"attn_rollout_{total+i}.png")
+            robust_makedirs(os.path.dirname(out_path))
             fig.savefig(out_path, dpi=200)
             plt.close(fig)
             if args.project:
@@ -185,6 +186,7 @@ def run_grad(args, use_integrated=False):
             ig_attr = (dh_base - baseline) * ig_attr / steps
             token_scores = ig_attr.norm(dim=-1)
             pred_vals = pred_eval
+            head.zero_grad(set_to_none=True)
         else:
             head.zero_grad(set_to_none=True)
             dh = dh_base.clone().requires_grad_(True)
@@ -192,6 +194,7 @@ def run_grad(args, use_integrated=False):
             pred.sum().backward()
             token_scores = dh.grad.detach().norm(dim=-1)
             pred_vals = pred.detach()
+            dh.grad = None
             head.zero_grad(set_to_none=True)
 
         # Plot per-sample scores as a bar (one score per item position)
@@ -201,6 +204,7 @@ def run_grad(args, use_integrated=False):
             plt.title("Grad saliency (site)")
             plt.tight_layout()
             out_path = os.path.join(args.out_dir, f"grad_site_{total+i}.png")
+            robust_makedirs(os.path.dirname(out_path))
             fig.savefig(out_path, dpi=200)
             plt.close(fig)
             if args.project:
